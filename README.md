@@ -1,5 +1,3 @@
-# test
-test
+# AI Projects
 
-#include <studio.h>
-
+주제 선정 중..
