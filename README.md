@@ -1,3 +1,3 @@
-# AI Projects
+# FaceID
 
-주제 선정 중..
+구상 중..
