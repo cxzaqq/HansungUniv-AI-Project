@@ -67,16 +67,12 @@ descs = {
     'owner': None
 }
 
-def img_enc():
-    for name, img_path in img_path.items():
-        img_bgr = cv2.imread(img_paths)
-        img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+for name, img_path in img_paths.items():
+    img_bgr = cv2.imread(img_path)
+    img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
 
-        _, img_shapes, _ = face_rec(img_rgb)
-        descs[name] = face_enc(img_rgb, img_shapes)[0]
+    _, img_shapes, _ = face_rec(img_rgb)
+    descs[name] = face_enc(img_rgb, img_shapes)[0]
 
-        np.save('img/descs.npy', descs)
-        print(descs)
-
-    
-img_enc()
+    np.save('registedImg/descs.npy', descs)
+    print(descs)
