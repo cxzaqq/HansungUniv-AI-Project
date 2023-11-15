@@ -1,6 +1,6 @@
 import cv2, dlib
 import numpy as np
-import matplotlib.pyplot as pyplot
+import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import matplotlib.patheffects as path_effects
 
@@ -30,7 +30,7 @@ while webcam.isOpened():
 webcam.release()
 cv2.destroyAllWindows()
 
-def face_rec(img):
+def find_faces(img):
     dets = detector(img, 1)
 
     if len(dets) == 0:
@@ -38,7 +38,7 @@ def face_rec(img):
     
     rects, shapes = [], []
     shapes_np = np.zeros((len(dets), 68, 2), dtype=np.int)
-    for k,d in enumerate(dets):
+    for k, d in enumerate(dets):
         rect = ((d.left(), d.top()), (d.right(), d.bottom()))
         rects.append(rect)
 
@@ -46,12 +46,12 @@ def face_rec(img):
 
         for i in range(0, 68):
             shapes_np[k][i] = (shape.part(i).x, shape.part(i).y)
-        
-            shapes.append(shape)
 
-        return rects, shapes, shapes_np
+        shapes.append(shape)
 
-def face_enc(img, shapes):
+    return rects, shapes, shapes_np
+
+def encode_faces(img, shapes):
     face_descriptors = []
     for shape in shapes:
         face_descriptor = facerec.compute_face_descriptor(img, shape)
@@ -59,25 +59,36 @@ def face_enc(img, shapes):
 
     return np.array(face_descriptors)
 
-descs = np.load('registedImg/descs.npy', allow_pickle=True)[()]
-
 img_bgr = cv2.imread('testImg/test.jpg')
 img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
 
-rects, shapes, _ = face_rec(img_rgb)
-descriptors = face_enc(img_rgb, shapes)
+rects, shapes, _ = find_faces(img_rgb)
+descriptors = encode_faces(img_rgb, shapes)
 
-fig, ax = pyplot.subplots(1, figsize=(20, 20))
+fig, ax = plt.subplots(1, figsize=(20, 20))
 ax.imshow(img_rgb)
 
+descs = np.load('registedImg/descs.npy', allow_pickle=True)[()]
+
 for i, desc in enumerate(descriptors):
+
     found = False
     for name, saved_desc in descs.items():
         dist = np.linalg.norm([desc] - saved_desc, axis=1)
 
-        if dist < 0.6:
+        if dist < 0.5:
             found = True
-            print("accessed")
+
+            text = ax.text(rects[i][0][0], rects[i][0][1], name, color='b', fontsize=40, fontweight='bold')
+            text.set_path_effects([path_effects.Stroke(linewidth=2, foreground='white')])
+            rect = patches.Rectangle(rects[i][0], rects[i][1][1] - rects[i][0][1], rects[i][1][0] - rects[i][0][0], linewidth=2, edgecolor='w', facecolor='none')
+            ax.add_patch(rect)
+
             break
+
         if not found:
-            print("denied")
+            ax.text(rects[i][0][0], rects[i][0][1], 'unknown', color='r', fontsize=20, fontweight='bold')
+            rect = patches.Rectangle(rects[i][0], rects[i][1][1] - rects[i][0][1], rects[i][1][0] - rects[i][0][0], linewidth=2, edgecolor='r', facecolor='none')
+            ax.add_patch(rect)
+
+plt.show()
