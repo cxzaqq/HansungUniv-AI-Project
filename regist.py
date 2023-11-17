@@ -1,8 +1,5 @@
 import cv2, dlib
 import numpy as np
-import matplotlib.pyplot as pyplot
-import matplotlib.patches as patches
-import matplotlib.patheffects as path_effects
 
 detector = dlib.get_frontal_face_detector()
 sp = dlib.shape_predictor('models/shape_predictor_68_face_landmarks.dat')
