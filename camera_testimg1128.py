@@ -9,6 +9,8 @@ import imutils
 import cv2
 from PIL import Image
 from PIL import ImageTk
+import numpy as np
+import time
 
 class SiameseNetwork(nn.Module):
     def __init__(self):
@@ -24,23 +26,20 @@ class SiameseNetwork(nn.Module):
             nn.ReLU(inplace=True),
             nn.BatchNorm2d(8),
 
-
             nn.ReflectionPad2d(1),
             nn.Conv2d(8, 8, kernel_size=3),
             nn.ReLU(inplace=True),
             nn.BatchNorm2d(8),
-
-
         )
 
         self.fc1 = nn.Sequential(
             nn.Linear(8*100*100, 500),
             nn.ReLU(inplace=True),
-
             nn.Linear(500, 500),
             nn.ReLU(inplace=True),
-
-            nn.Linear(500, 5))
+            nn.Linear(500, 250),
+            nn.ReLU(inplace=True),
+            nn.Linear(250, 15))
 
     def forward_once(self, x):
         output = self.cnn1(x)
@@ -53,7 +52,6 @@ class SiameseNetwork(nn.Module):
         output2 = self.forward_once(input2)
         return output1, output2
 
-
 #######################################################
 
 test_dir = 'test'
@@ -64,24 +62,35 @@ test_data = dset.ImageFolder(test_dir, transform=transforms.Compose([
     ])
 )
 test_loader = DataLoader(test_data)
-classes = test_data.classes
+
 net = SiameseNetwork()
-net.load_state_dict(torch.load(('model2.pth'), map_location=torch.device('cpu')))
-
-
-
+net.load_state_dict(torch.load(('model16_250+15_10+100_3000+10.pth'), map_location=torch.device('cpu')))
 net.eval()
+
+test_list = []
 with torch.no_grad():
-    test_list = []
-    for data in test_loader:
-        img1, label = data
+    for img1, label in test_loader:
         output2 = net.forward_once(img1)
         test_list.append([output2, label])
 
-
-for i in test_list:
-    print(i)
+classes = test_data.classes
+colors = np.random.uniform(0, 255, size=(len(classes), 3))
+################################################### 디버그
+for idx, i in enumerate(test_list):
+    print('\n=====================', idx , '=====================')
+    # print(i[1].item(), end='\t')
+    # print(torch.round(i[0]).numpy())
+    k = 0
+    for j in test_list:
+        if j[1] == k:
+            if k:
+                print('')
+            print(f'{classes[k]:10s}', end='\t')
+            k += 1
+        print(int(F.pairwise_distance(i[0], j[0]).item()), end='\t')
+    
 ########################################################
+
 def img_update(frame):
     # 촬영된 이미지를 레이블에 업데이트
     img = imutils.resize(frame, width=WIDTH_CAM)
@@ -105,38 +114,58 @@ def test_camera():
             faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
             if len(faces):
                 for (x, y, w, h) in faces:
-                    cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
                     img0 = gray[y : y+h, x : x+w]
-                    name, color = face_detection(img0)
-                    cv2.putText(frame, f'{name}', (x, y), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
+                    name, color, dist, i = face_detection(img0)
+                    t = cv2.getTextSize(f'{name}', cv2.FONT_HERSHEY_SIMPLEX, 1, 2)[0]
+                    cv2.rectangle(frame, (x, y-t[1]-5), (x+t[0]+5, y), color, -1)
+                    cv2.rectangle(frame, (x, y), (x+w, y+h), color, 2)
+                    cv2.putText(frame, f'{name}', (x, y), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+                    cv2.putText(frame, f'{i}) {dist:.1f}', (x, y-35), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 2)  # 디버그
+                    
                     label2.configure(text='Face Found', fg="black")
             else:
                 label2.configure(text="Face Not Found", fg="dimgray")
             
             img_update(frame)  # 이미지 업데이트
             root.update()
+            time.sleep(0.5)
 
 
 def face_detection(img0):  # 얼굴 비교
     img0 = torch.from_numpy(img0).float() / 255.0
     img0 = img0.unsqueeze(0).unsqueeze(0)
     img0 = transforms.Resize((100, 100))(img0)
+    output1 = net.forward_once(img0)
 
-    net.eval()
+    name = None
+    min_dist = float("inf")
+
+    k, lb = 0, 0                                            # 디버그
+    print('\n============================================') #
+
     with torch.no_grad():
-        name = None
-        output1 = net.forward_once(img0)
-        for data in test_list:
-            output2, label = data
-            euclidean_distance = F.pairwise_distance(output1, output2)
-            if euclidean_distance.item() < 4**(1/2):
-                name = classes[label.item()]
-                color = (255, 255, 255)
-                break
+        for i, (output2, label) in enumerate(test_list):
+            euclidean_dist = F.pairwise_distance(output1, output2)
+            
+            if label.item() == k:                           #
+                if k:                                       #
+                    print('')                               #
+                print(f'{classes[k]:10s}', end='\t')        #
+                k+=1                                        #
+            print(f'{euclidean_dist.item():.1f}', end='\t') #
+            
+            if euclidean_dist.item() < 80:  # margin
+                if euclidean_dist.item() < min_dist:
+                    lb=i                                    #
+                    min_dist = euclidean_dist.item()
+                    name = classes[label.item()]
+                    color = colors[label.item()]
+
     if name is None:
-        name = '[UNKNOWN]'
+        name = '*UNKNOWN'
         color = (0, 0, 255)
-    return name, color
+
+    return name, color, min_dist, lb
 
 def exit():
     try:
